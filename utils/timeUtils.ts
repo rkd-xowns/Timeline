@@ -6,7 +6,7 @@ export const getTimeInZone = (zone: Location) => {
     timeZone: zone,
     hour: '2-digit',
     minute: '2-digit',
-    hour12: true,
+    hour12: false, // 24h format as requested
   }).format(new Date());
 };
 
@@ -19,21 +19,43 @@ export const getHourInZoneAtUTC = (utcDate: Date, zone: Location) => {
   return parseInt(formatter.format(utcDate), 10);
 };
 
-// Generates an array of 48 Date objects starting from the beginning of the selected day in UTC (every 30 mins)
-export const generate30MinSlots = (baseDate: Date) => {
-  const start = new Date(baseDate);
-  start.setUTCHours(0, 0, 0, 0);
-  return Array.from({ length: 48 }, (_, i) => {
-    const d = new Date(start);
-    d.setUTCMinutes(i * 30);
-    return d;
+// Generates an array of 49 Date objects starting from 00:00 in the specified zone
+// Includes 24:00 (the 49th slot)
+export const generate30MinSlots = (baseDate: Date, zone: Location) => {
+  // Get date components in the target zone to find the start of the local day
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(baseDate);
+  const year = parts.find(p => p.type === 'year')!.value;
+  const month = parts.find(p => p.type === 'month')!.value;
+  const day = parts.find(p => p.type === 'day')!.value;
+
+  // Create a UTC date for the start of the calendar day
+  const utcStart = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+  
+  // Calculate the offset in minutes at that specific time in that zone
+  const getOffset = (date: Date, tz: string) => {
+    const base = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const target = new Date(date.toLocaleString('en-US', { timeZone: tz }));
+    return (base.getTime() - target.getTime()) / 60000;
+  };
+  
+  const offsetMinutes = getOffset(utcStart, zone);
+  const start = new Date(utcStart.getTime() + offsetMinutes * 60000);
+
+  return Array.from({ length: 49 }, (_, i) => {
+    return new Date(start.getTime() + i * 30 * 60000);
   });
 };
 
 export const formatTimeOnly = (date: Date, zone: Location) => {
   return new Intl.DateTimeFormat('en-US', {
     timeZone: zone,
-    hour: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   }).format(date);

@@ -16,19 +16,34 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, userLo
   const [startMin, setStartMin] = useState('00');
   const [endHour, setEndHour] = useState('10');
   const [endMin, setEndMin] = useState('00');
-  const [type, setType] = useState<'work' | 'sleep' | 'leisure' | 'date' | 'other'>('work');
+  const [selectedTz, setSelectedTz] = useState<Location>(userLocation);
+  const [type, setType] = useState<'work' | 'sleep' | 'leisure' | 'date' | 'study' | 'other'>('work');
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Calculate UTC startTime
-    const startTimeUTC = new Date(selectedDate);
-    startTimeUTC.setUTCHours(parseInt(startHour, 10), parseInt(startMin, 10), 0, 0);
+    // Construct local date parts
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const day = selectedDate.getDate();
+    
+    // Create a date object representing the local time entered
+    // We treat it as UTC first, then adjust by the timezone's offset
+    const startObj = new Date(Date.UTC(year, month, day, parseInt(startHour, 10), parseInt(startMin, 10)));
+    const endObj = new Date(Date.UTC(year, month, day, parseInt(endHour, 10), parseInt(endMin, 10)));
 
-    const endTimeUTC = new Date(selectedDate);
-    endTimeUTC.setUTCHours(parseInt(endHour, 10), parseInt(endMin, 10), 0, 0);
+    // Helper to calculate the UTC offset in minutes for the chosen timezone at that specific time
+    const getOffset = (date: Date, tz: string) => {
+      const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+      const tzDate = new Date(date.toLocaleString('en-US', { timeZone: tz }));
+      return (utcDate.getTime() - tzDate.getTime()) / 60000;
+    };
+
+    const offset = getOffset(startObj, selectedTz);
+    const startTimeUTC = new Date(startObj.getTime() + offset * 60000);
+    const endTimeUTC = new Date(endObj.getTime() + offset * 60000);
 
     // If end time is before start time, assume it ends the next day
     if (endTimeUTC <= startTimeUTC) {
@@ -57,17 +72,17 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, userLo
       <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
         <div className="bg-gradient-to-r from-pink-500 to-rose-400 p-8">
           <h2 className="text-white text-2xl font-black flex items-center gap-3 italic">
-            <i className="fa-solid fa-plus-circle"></i>
-            PLAN ACTIVITY
+            <i className="fa-solid fa-calendar-plus"></i>
+            NEW TASK
           </h2>
           <p className="text-pink-100 text-xs mt-2 font-bold uppercase tracking-widest opacity-80">
-            For {selectedDate.toLocaleDateString()}
+            {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
         </div>
         
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">What's the plan?</label>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Title</label>
             <input 
               type="text" 
               value={title}
@@ -79,9 +94,29 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, userLo
             />
           </div>
 
+          <div className="space-y-2">
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Timezone for this entry</label>
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              <button 
+                type="button" 
+                onClick={() => setSelectedTz(Location.KOREA)}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${selectedTz === Location.KOREA ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-400'}`}
+              >
+                Seoul (KST)
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setSelectedTz(Location.GEORGIA)}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${selectedTz === Location.GEORGIA ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-400'}`}
+              >
+                Georgia (EST/EDT)
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">From (UTC)</label>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">From</label>
               <div className="flex gap-2">
                 <select 
                   value={startHour}
@@ -100,9 +135,8 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, userLo
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">To (UTC)</label>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">To</label>
               <div className="flex gap-2">
-                {/* Fix: Removed redundant hidden select and correctly set onChange to setEndHour */}
                 <select 
                   value={endHour}
                   onChange={(e) => setEndHour(e.target.value)}
@@ -124,14 +158,14 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, userLo
           <div className="space-y-1.5">
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Category</label>
             <div className="flex flex-wrap gap-2">
-              {(['work', 'sleep', 'leisure', 'date', 'other'] as const).map((cat) => (
+              {(['work', 'sleep', 'leisure', 'date', 'study', 'other'] as const).map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setType(cat)}
                   className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${type === cat ? 'bg-pink-500 text-white shadow-lg shadow-pink-100 scale-105' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
                 >
-                  {cat === 'date' ? 'Date ❤️' : cat}
+                  {cat === 'date' ? 'Date ❤️' : cat === 'study' ? 'Study 📚' : cat}
                 </button>
               ))}
             </div>
@@ -149,7 +183,7 @@ const EventModal: React.FC<EventModalProps> = ({ isOpen, onClose, onSave, userLo
               type="submit"
               className="flex-1 px-4 py-4 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-400 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-pink-200 hover:scale-[1.02] active:scale-95 transition-all"
             >
-              Add Event
+              Add Task
             </button>
           </div>
         </form>

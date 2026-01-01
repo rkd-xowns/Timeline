@@ -8,6 +8,7 @@ interface FeelingSectionProps {
   currentUser: 'me' | 'partner';
   myLocation: Location;
   partnerLocation: Location;
+  names: { me: string; partner: string };
 }
 
 const EMOJIS = ['❤️', '😊', '🥰', '🥺', '😴', '😤', '😭', '🤯', '🍕', '☕', '✨'];
@@ -17,7 +18,8 @@ const FeelingSection: React.FC<FeelingSectionProps> = ({
   onAddFeeling, 
   currentUser,
   myLocation,
-  partnerLocation
+  partnerLocation,
+  names
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [text, setText] = useState('');
@@ -47,7 +49,6 @@ const FeelingSection: React.FC<FeelingSectionProps> = ({
       hour12: false
     }).format(date);
     
-    // Changing like the timeline: the primary time depends on the toggle
     const primaryTime = currentUser === 'me' ? krTime : gaTime;
     const secondaryTime = currentUser === 'me' ? gaTime : krTime;
     const primaryZone = currentUser === 'me' ? 'Seoul' : 'Georgia';
@@ -124,7 +125,6 @@ const FeelingSection: React.FC<FeelingSectionProps> = ({
         
         {feelings.map((feeling, idx) => {
           const rotation = (idx % 3 === 0) ? '-1deg' : (idx % 3 === 1) ? '1.5deg' : '-2deg';
-          // me = yellow, partner = pink
           const colorClass = feeling.userId === 'me' ? 'bg-[#fef9c3]' : 'bg-[#fce7f3]';
           const { primaryTime, secondaryTime, primaryZone, secondaryZone } = getDualTime(feeling.timestamp);
 
@@ -134,14 +134,13 @@ const FeelingSection: React.FC<FeelingSectionProps> = ({
               style={{ transform: `rotate(${rotation})` }}
               className={`${colorClass} p-5 rounded-md shadow-lg shadow-black/5 border border-black/5 hover:scale-105 transition-all duration-300 relative group aspect-square flex flex-col justify-between`}
             >
-              {/* Sticky Tape Effect */}
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-12 h-6 bg-white/40 rounded shadow-inner rotate-1"></div>
               
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
                   <span className="text-2xl drop-shadow-sm">{feeling.emoji}</span>
                   <div className={`text-[8px] font-black uppercase px-2 py-0.5 rounded shadow-sm ${feeling.userId === 'me' ? 'bg-amber-400 text-white' : 'bg-pink-500 text-white'}`}>
-                    {feeling.userId === 'me' ? 'Me' : 'Hers'}
+                    {feeling.userId === 'me' ? names.me : names.partner}
                   </div>
                 </div>
                 <p className="text-xs font-bold text-gray-800 leading-snug line-clamp-5">

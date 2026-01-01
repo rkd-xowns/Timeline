@@ -15,7 +15,7 @@ export interface CalendarEvent {
   title: string;
   startTime: string; // ISO string in UTC
   durationMinutes: number;
-  type: 'work' | 'sleep' | 'leisure' | 'date' | 'other';
+  type: 'work' | 'sleep' | 'leisure' | 'date' | 'study' | 'other';
   userId: string;
 }
 
