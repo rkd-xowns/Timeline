@@ -1,7 +1,11 @@
 
 import { CalendarEvent, DailyHighlight, DailyFeeling } from '../types';
 
+// Using a reliable public API for shared JSON storage
 const API_BASE = 'https://jsonblob.com/api/jsonBlob';
+// This is a fresh, dedicated ID for Taejun and Yuju. 
+// If this ever fails, the app will fallback to local-only until fixed.
+const FIXED_BLOB_ID = '1342571212873318400'; 
 
 export interface SharedData {
   events: CalendarEvent[];
@@ -14,37 +18,38 @@ export interface SharedData {
   lastUpdated: string;
 }
 
-// We use a fixed project ID in JSONBlob or similar. 
-// For this app, we'll use a hardcoded blob ID for the couple.
-// In a real production app, this would be a specific user record.
-const FIXED_BLOB_ID = '1342551403217469440'; 
-
-export const updateBridge = async (code: string, data: SharedData): Promise<void> => {
+export const updateBridge = async (code: string, data: SharedData): Promise<boolean> => {
   try {
-    await fetch(`${API_BASE}/${FIXED_BLOB_ID}`, {
+    const response = await fetch(`${API_BASE}/${FIXED_BLOB_ID}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify(data)
     });
+    return response.ok;
   } catch (err) {
-    console.error('Update Error:', err);
+    // Silently log for developer but don't break the app
+    console.warn('Sync Push Failed (Network):', err);
+    return false;
   }
 };
 
 export const getBridgeData = async (code: string): Promise<SharedData | null> => {
   try {
-    const response = await fetch(`${API_BASE}/${FIXED_BLOB_ID}`);
-    if (!response.ok) return null;
+    const response = await fetch(`${API_BASE}/${FIXED_BLOB_ID}`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) {
+      if (response.status === 404) console.error('Bridge ID not found on server.');
+      return null;
+    }
     return await response.json();
   } catch (err) {
-    console.error('Fetch Error:', err);
+    console.warn('Sync Pull Failed (Network):', err);
     return null;
   }
-};
-
-// Placeholder for logic if we ever needed to recreate it
-export const createBridge = async (data: SharedData): Promise<string> => {
-  return FIXED_BLOB_ID;
 };
 
 export const mergeData = (local: any[], remote: any[]) => {
@@ -54,6 +59,6 @@ export const mergeData = (local: any[], remote: any[]) => {
       combined.push(remoteItem);
     }
   });
-  // Sort by time
-  return combined;
+  // Filter out any duplicates that might have slipped in
+  return Array.from(new Map(combined.map(item => [item.id, item])).values());
 };

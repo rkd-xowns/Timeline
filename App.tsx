@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Location, CalendarEvent, DailyHighlight, DailyFeeling } from './types';
 import { getTimeInZone } from './utils/timeUtils';
 import { updateBridge, getBridgeData, mergeData, SharedData } from './services/syncService';
@@ -18,7 +18,6 @@ const PRESET_COLORS = [
   { name: 'Violet', hex: '#8b5cf6' },
 ];
 
-// This is your private bridge ID. It keeps you two connected forever without codes.
 const PRIVATE_BRIDGE_ID = 'ldr-taejun-yuju-bridge-v1';
 
 const App: React.FC = () => {
@@ -31,7 +30,7 @@ const App: React.FC = () => {
 
   const [currentUser, setCurrentUser] = useState<'me' | 'partner'>('me');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'syncing' | 'error'>('idle');
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'pending' | 'error'>('synced');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const [names, setNames] = useState<{ me: string; partner: string }>(() => {
@@ -61,19 +60,21 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  // Background Persistence & Sync
+  // Background Push
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(allEvents));
     localStorage.setItem(STORAGE_KEYS.HIGHLIGHTS, JSON.stringify(highlights));
     localStorage.setItem(STORAGE_KEYS.FEELINGS, JSON.stringify(feelings));
     localStorage.setItem(STORAGE_KEYS.NAMES, JSON.stringify(names));
     
-    setSaveStatus('syncing');
+    setSyncStatus('pending');
     const data: SharedData = { events: allEvents, highlights, feelings, names, lastUpdated: new Date().toISOString() };
-    updateBridge(PRIVATE_BRIDGE_ID, data).then(() => setSaveStatus('saved'));
+    updateBridge(PRIVATE_BRIDGE_ID, data).then(success => {
+      setSyncStatus(success ? 'synced' : 'error');
+    });
   }, [allEvents, highlights, feelings, names]);
 
-  // Invisible Polling
+  // Background Pull (Polling)
   useEffect(() => {
     const interval = setInterval(async () => {
       const remote = await getBridgeData(PRIVATE_BRIDGE_ID);
@@ -82,8 +83,12 @@ const App: React.FC = () => {
         setFeelings(prev => mergeData(prev, remote.feelings));
         setHighlights(prev => ({ ...prev, ...remote.highlights }));
         if (remote.names) setNames(remote.names);
+        setSyncStatus('synced');
+      } else {
+        // Only set error if we actually fail a network request
+        // (getBridgeData logs the error to console internally)
       }
-    }, 10000); // Check for updates every 10 seconds
+    }, 15000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -128,9 +133,15 @@ const App: React.FC = () => {
             
             <button 
               onClick={() => setIsSettingsOpen(true)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 text-gray-400 hover:text-pink-500 hover:bg-pink-50 transition-all border border-gray-100"
+              className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 text-gray-400 hover:text-pink-500 hover:bg-pink-50 transition-all border border-gray-100 relative"
             >
               <i className="fa-solid fa-user-gear text-sm"></i>
+              <div 
+                className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white transition-colors duration-500 ${
+                  syncStatus === 'synced' ? 'bg-emerald-500' : 
+                  syncStatus === 'pending' ? 'bg-amber-400' : 'bg-rose-500'
+                }`}
+              />
             </button>
           </div>
 
@@ -175,7 +186,6 @@ const App: React.FC = () => {
         <FeelingSection feelings={feelings.filter(f => f.dateKey === getDateKey(selectedDate))} onAddFeeling={handleAddFeeling} currentUser={currentUser} myLocation={Location.KOREA} partnerLocation={Location.GEORGIA} names={names} />
       </main>
 
-      {/* Settings Modal (Simplified Name Editing) */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden p-8 space-y-6">
